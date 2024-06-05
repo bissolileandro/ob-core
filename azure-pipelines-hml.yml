@@ -1,0 +1,48 @@
+trigger:
+- hml
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - task: UseDotNet@2
+    inputs:
+      packageType: 'sdk'
+      version: '7.0.x'
+
+  - task: DotNetCoreCLI@2
+    displayName: 'DotNet Restore'
+    inputs:
+      command: 'restore'      
+  
+  - task: DotNetCoreCLI@2
+    displayName: 'DotNet Build'
+    inputs:
+      command: 'build'
+      arguments: '--configuration Release'
+
+  # AppSettings
+  - script: cp -v src/ob.core.api/appsettings.$(ASPNETCORE_ENVIRONMENT).json src/ob.core.api/appsettings.json
+    displayName: 'Configurar AppSettings do ambiente'
+
+  # Login
+  - script: docker login -u $(Username) -p $(Password) $(Username).azurecr.io
+    displayName: 'Authenticate with an Azure container'
+
+  # Build
+  - script: docker build -t onebroker-core:hml .
+    displayName: 'Build container'
+
+  # Tag
+  - script: docker tag onebroker-core:hml $(Username).azurecr.io/onebroker-core:hml
+    displayName: 'Tag container' 
+
+  # Push
+  - script: docker push $(Username).azurecr.io/onebroker-core:hml
+    displayName: 'Push container'   
+
+  - task: AzureAppServiceManage@0
+    inputs:
+      azureSubscription: 'Azure Service Principal OneBroker'
+      Action: 'Restart Azure App Service'
+      WebAppName: 'onebroker-core-api-hml'     
